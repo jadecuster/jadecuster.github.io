@@ -1,20 +1,237 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>A9</title>
+  <meta charset="UTF-8">
+  <title>Broadway Charts: Good vs. Terrible</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 30px;
+      background: #f4f4f4;
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    .chart-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-around;
+      gap: 40px;
+    }
+
+    .viz {
+      flex: 1 1 400px;
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+
+    .viz h2 {
+      text-align: center;
+    }
+
+    .bar {
+      fill: steelblue;
+    }
+
+    .bar:hover {
+      fill: darkorange;
+    }
+
+    .tooltip {
+      position: absolute;
+      background: white;
+      border: 1px solid #ccc;
+      padding: 6px 10px;
+      border-radius: 4px;
+      pointer-events: none;
+      font-size: 14px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      opacity: 0;
+    }
+
+    .terrible .bar {
+      fill: orangered;
+      stroke: magenta;
+      stroke-width: 4px;
+    }
+
+    .terrible .label {
+      fill: red;
+      font-size: 7px;
+      text-anchor: end;
+      transform: rotate(-45deg);
+    }
+
+    .terrible {
+      font-family: "Comic Sans MS", cursive, sans-serif;
+    }
+  </style>
 </head>
 <body>
+  <h1>A10: Black and White Hat</h1>
+  <div class="chart-container">
+    <div class="viz terrible">
+      <h2>Black Hat</h2>
+      <svg id="badChart" width="500" height="400"></svg>
+      <p>This chart is bad because it has no axes labels like ticks or values or anything and the axes titles are intentionally there to provide nothing. The bars have weird colors that clashes and does nothing. The text for the axes are also instead in the middle of the screen in bright red which does nothing for the graph. Also the color legend does nothing considering the color doesn't appear in the graph and the value is "Value". The data is also distorted which it doesn't tell you since the bar chart quite honestly gives you nothing.</p>
+    </div>
 
-<h1>A9 - Graph Visualization in D3
-</h1>
+    <div class="viz">
+      <h2>White Hat</h2>
+      <svg id="goodChart" width="500" height="400"></svg>
+      <p>This chart is good because it has a clear concise axes with good labels. The bars are properly spaced and the nothing is cut off or out in the middle of nowhere. The tooltips give us more infortmation about each thing and in all makes it easy to read and visually appealing. Simple and concise and everything you need for a well made bar graph.</p>
+    </div>
+  </div>
 
-<ol>
-	<li>Sketch 1 - <a href="https://vizhub.com/jadecuster/1e0f14eb47994d159fc049d533f00c86">Chloropleth</a></li>
-	<li>Sketch 2 - <a href="https://vizhub.com/jadecuster/7a03176907a64805ad826a894203b678">Proportional Symbols</a></li>
-	
-</ol>
+  <div class="tooltip" id="tooltip"></div>
 
+  <script>
+    const url = "https://gist.githubusercontent.com/jadecuster/48dbc49185e2ea70a3b023d42640df22/raw/c913d7ff6101abcbb18de3a05812253ff48aab4f/broadway.csv";
+
+    d3.csv(url).then(data => {
+      const topShows = d3.rollups(
+        data,
+        v => d3.sum(v, d => +d["Statistics.Gross"]),
+        d => d["Show.Name"]
+      ).sort((a, b) => d3.descending(a[1], b[1])).slice(0, 10);
+
+      const svgGood = d3.select("#goodChart"),
+            marginG = {top: 20, right: 30, bottom: 60, left: 180},
+            widthG = +svgGood.attr("width") - marginG.left - marginG.right,
+            heightG = +svgGood.attr("height") - marginG.top - marginG.bottom,
+            chartG = svgGood.append("g").attr("transform", `translate(${marginG.left},${marginG.top})`);
+
+      const yG = d3.scaleBand()
+        .domain(topShows.map(d => d[0]))
+        .range([0, heightG])
+        .padding(0.2);
+
+      const xG = d3.scaleLinear()
+        .domain([0, d3.max(topShows, d => d[1])])
+        .range([0, widthG]);
+
+      chartG.append("g")
+        .call(d3.axisLeft(yG));
+
+      chartG.append("g")
+        .attr("transform", `translate(0,${heightG})`)
+        .call(d3.axisBottom(xG).ticks(5).tickFormat(d => "$" + d3.format(".2s")(d)));
+
+      chartG.append("text")
+        .attr("x", widthG / 2)
+        .attr("y", heightG + 40)
+        .attr("text-anchor", "middle")
+        .attr("font-weight", "bold")
+        .text("Total Gross Revenue");
+
+      chartG.append("text")
+        .attr("x", -heightG / 2)
+        .attr("y", -marginG.left + 20)
+        .attr("transform", "rotate(-90)")
+        .attr("text-anchor", "middle")
+        .attr("font-weight", "bold")
+        .text("Show Title");
+
+      chartG.selectAll(".bar")
+        .data(topShows)
+        .enter()
+        .append("rect")
+        .attr("class", "bar")
+        .attr("y", d => yG(d[0]))
+        .attr("x", 0)
+        .attr("height", yG.bandwidth())
+        .attr("width", d => xG(d[1]))
+        .on("mouseover", (event, d) => {
+          d3.select("#tooltip")
+            .style("opacity", 1)
+            .html(`<strong>${d[0]}</strong><br/>Gross: $${d3.format(",")(d[1])}`)
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mouseout", () => {
+          d3.select("#tooltip").style("opacity", 0);
+        });
+
+    const svgBad = d3.select("#badChart"),
+      marginB = {top: 30, right: 20, bottom: 150, left: 60},
+      widthB = +svgBad.attr("width") - marginB.left - marginB.right,
+      heightB = +svgBad.attr("height") - marginB.top - marginB.bottom,
+      chartB = svgBad.append("g").attr("transform", `translate(${marginB.left},${marginB.top})`);
+
+	const clashColors = ["#ff00ff", "#00ffff", "#ffff00", "#ff0000", "#00ff00", "#0000ff", "#ffa500", "#800080", "#008000", "#000000"];
+
+	const distortedData = topShows.map((d, i) => {
+	  return [d[0], Math.sqrt(d[1]), clashColors[i % clashColors.length]];
+	});
+
+	const xB = d3.scaleBand()
+	  .domain(distortedData.map(d => d[0]))
+	  .range([0, widthB])
+	  .padding(0.1);
+
+	const yB = d3.scaleLinear()
+	  .domain([d3.max(distortedData, d => d[1]), 0]) // reversed!
+	  .range([0, heightB]);
+
+	chartB.selectAll(".bar")
+	  .data(distortedData)
+	  .enter().append("rect")
+	  .attr("x", d => xB(d[0]))
+	  .attr("y", d => yB(d[1]))
+	  .attr("width", xB.bandwidth())
+	  .attr("height", d => heightB - yB(d[1]))
+	  .attr("fill", d => d[2])
+	  .attr("stroke", "lime")
+	  .attr("stroke-width", 2);
+
+	chartB.selectAll(".label")
+	  .data(distortedData)
+	  .enter()
+	  .append("text")
+	  .attr("class", "label")
+	  .attr("x", d => xB(d[0]) + xB.bandwidth() / 2)
+	  .attr("y", heightB + 40)
+	  .attr("transform", d => `rotate(-60, ${xB(d[0]) + xB.bandwidth() / 2}, ${heightB + 40})`)
+	  .text(d => d[0])
+	  .style("fill", "red")
+	  .style("font-size", "16px");
+
+	chartB.append("text")
+	  .attr("x", widthB / 2)
+	  .attr("y", heightB + 90)
+	  .attr("text-anchor", "middle")
+	  .style("font-size", "16px")
+	  .style("fill", "darkred")
+	  .text("Metric Units");
+
+	chartB.append("text")
+	  .attr("transform", "rotate(-90)")
+	  .attr("y", -50)
+	  .attr("x", -heightB / 2)
+	  .attr("text-anchor", "middle")
+	  .style("font-size", "16px")
+	  .style("fill", "darkred")
+	  .text("Adjusted Gross Value (log-ish)");
+
+	chartB.append("rect")
+	  .attr("x", widthB - 100)
+	  .attr("y", -20)
+	  .attr("width", 12)
+	  .attr("height", 12)
+	  .attr("fill", "pink");
+
+	chartB.append("text")
+	  .attr("x", widthB - 80)
+	  .attr("y", -10)
+	  .text("Value")
+	  .style("fill", "purple")
+	  .style("font-size", "12px");
+	    });
+  </script>
 </body>
 </html>
